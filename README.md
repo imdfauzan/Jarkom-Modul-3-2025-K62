@@ -401,3 +401,80 @@ dig -x 192.242.3.4 @192.242.3.3
 dig TXT Elros.K62.com @192.242.3.3
 dig TXT Pharazon.K62.com @192.242.3.3
 ```
+### Nomor 6
+Di terminal aldarion
+```bash
+#!/bin/bash
+# Node: Aldarion (DHCP Server)
+# Tujuan: Mengatur Lease Time, Rentang IP, dan Fixed Address sesuai Soal 2 & 6.
+
+# --- Variabel Konfigurasi ---
+ALDARION_IP="192.242.4.2"
+DURIN_GATEWAY="192.242.4.1"
+KHAMUL_MAC="02:42:9b:4a:8f:00" # MAC Khamul yang sudah diverifikasi
+DNS_SERVERS="192.242.5.2, 192.242.3.3" # Minastir (Fwd), Erendis (Master)
+
+# --- 1. KONFIGURASI JARINGAN & INSTALASI (Untuk memastikan IP statik terpasang) ---
+echo "1. Menetapkan IP Statik dan memastikan instalasi DHCP Server..."
+ip address add ${ALDARION_IP}/24 dev eth0
+ip route add default via ${DURIN_GATEWAY}
+
+# Note: Anda perlu memastikan isc-dhcp-server terinstal sebelum langkah ini.
+
+# --- 2. KONFIGURASI DEFAULT INTERFACE ---
+echo "2. Mengatur interface default DHCP..."
+echo 'INTERFACESv4="eth0"' > /etc/default/isc-dhcp-server
+
+# --- 3. KONFIGURASI dhcpd.conf (Integrasi Soal 2 & 6) ---
+echo "3. Menulis ulang /etc/dhcp/dhcpd.conf dengan pengaturan lease time..."
+cat << EOF > /etc/dhcp/dhcpd.conf
+ddns-update-style none;
+default-lease-time 300;
+max-lease-time 3600;        # Batas Waktu Maksimal (1 jam)
+
+authoritative;
+log-facility local7;
+
+# Subnet 1: Keluarga Manusia (Lease 30 menit)
+subnet 192.242.1.0 netmask 255.255.255.0 {
+    range 192.242.1.6 192.242.1.34;
+    range 192.242.1.68 192.242.1.94;
+    option routers 192.242.1.1;
+    option domain-name-servers ${DNS_SERVERS}; 
+    default-lease-time 1800;       # Setengah jam (30 menit)
+    max-lease-time 3600;
+}
+
+# Subnet 2: Keluarga Peri (Lease 10 menit)
+subnet 192.242.2.0 netmask 255.255.255.0 {
+    range 192.242.2.35 192.242.2.67;
+    range 192.242.2.96 192.242.2.121;
+    option routers 192.242.2.1;
+    option domain-name-servers ${DNS_SERVERS};
+    default-lease-time 600;          # Seperenam jam (10 menit)
+    max-lease-time 3600;
+}
+
+# Fixed Address: Khamul
+host khamul {
+    hardware ethernet ${KHAMUL_MAC};
+    fixed-address 192.242.3.95;
+    option routers 192.242.3.1;
+    max-lease-time 3600;
+}
+
+# Subnet 3, 4, 5 (Static)
+subnet 192.242.3.0 netmask 255.255.255.0 { option routers 192.242.3.1; }
+subnet 192.242.4.0 netmask 255.255.255.0 { option routers 192.242.4.1; }
+subnet 192.242.5.0 netmask 255.255.255.0 { option routers 192.242.5.1; }
+EOF
+
+# --- 4. RESTART LAYANAN ---
+echo "4. Membersihkan PID dan me-restart DHCP Server..."
+rm -f /var/run/dhcpd.pid
+service isc-dhcp-server restart
+```
+setelah menjalankan, verifikasi.  
+```bash
+cat /var/lib/dhcp/dhclient.leases
+```
